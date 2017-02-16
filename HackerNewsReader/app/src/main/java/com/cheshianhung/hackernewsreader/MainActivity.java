@@ -9,6 +9,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -24,12 +25,15 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
+    public static final int DOWNLOAD_LENGTH = 10;
+
     ListView titleList;
     ArrayList<String> titleAry;
     ArrayList<String> idAry;
     ArrayList<String> urlAry;
-
     ArrayAdapter<String> arrayAdapter;
+    int downloadCounter = 0;
+    int missCounter = 0;
 
 
 
@@ -45,24 +49,23 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(String s) {
             super.onPostExecute(s);
 
-            try {
-                JSONArray jsonArray = new JSONArray(s);
-                idAry = new ArrayList<String>();
+            if(s != null) {
+                try {
+                    JSONArray jsonArray = new JSONArray(s);
+                    idAry = new ArrayList<String>();
 
-                for(int i = 0; i < jsonArray.length(); i++){
-                    idAry.add(jsonArray.get(i).toString());
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        idAry.add(jsonArray.get(i).toString());
+                    }
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Toast.makeText(getApplicationContext(), "Error: Unable to get the id array.", Toast.LENGTH_SHORT).show();
                 }
 
-            }
-            catch(Exception e) {
-                e.printStackTrace();
-            }
+                moreArticles();
 
-            for(int i = 0; i < 30; i++){
-                DownloadTitleFromID downloadTitleFromID = new DownloadTitleFromID();
-                downloadTitleFromID.execute("https://hacker-news.firebaseio.com/v0/item/" + idAry.get(i) + ".json?print=pretty");
             }
-
         }
     }
 
@@ -76,21 +79,32 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(String s) {
             super.onPostExecute(s);
 
-//            Log.i("Item JSON", s);
+            if(s != null) {
+                try {
+                    JSONObject jsonObject = new JSONObject(s);
 
-            try {
-                JSONObject jsonObject = new JSONObject(s);
+                    String title = jsonObject.getString("title");
+                    String url = jsonObject.getString("url");
+                    titleAry.add(title);
 
-                String title = jsonObject.getString("title");
-                String url = jsonObject.getString("url");
-                titleAry.add(title);
-                urlAry.add(url);
-                arrayAdapter.notifyDataSetChanged();
 
-            } catch (Exception e) {
-                e.printStackTrace();
+                    urlAry.add(url);
+
+
+//                    Log.i("title", title);
+//                    Log.i("url", url);
+                    if(titleAry.size() == downloadCounter * DOWNLOAD_LENGTH - missCounter && titleAry.size() != idAry.size() - missCounter){
+                        titleAry.add("More articles...");
+                    }
+
+                    arrayAdapter.notifyDataSetChanged();
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    missCounter++;
+                    //Toast.makeText(getApplicationContext(), "Error: Unable to read the title and url.", Toast.LENGTH_SHORT).show();
+                }
             }
-
         }
     }
 
@@ -114,12 +128,27 @@ public class MainActivity extends AppCompatActivity {
         titleList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Intent intent = new Intent(getApplicationContext(), Main2Activity.class);
-                intent.putExtra("url", urlAry.get(position));
-                startActivity(intent);
+
+                if(position == downloadCounter * DOWNLOAD_LENGTH - missCounter) {
+                    titleAry.remove(position);
+                    moreArticles();
+                }
+                else{
+                    Intent intent = new Intent(getApplicationContext(), Main2Activity.class);
+                    intent.putExtra("url", urlAry.get(position));
+                    startActivity(intent);
+                }
             }
         });
 
+    }
+
+    private void moreArticles(){
+        for (int i = downloadCounter * DOWNLOAD_LENGTH; i < downloadCounter * DOWNLOAD_LENGTH + DOWNLOAD_LENGTH; i++) {
+            DownloadTitleFromID downloadTitleFromID = new DownloadTitleFromID();
+            downloadTitleFromID.execute("https://hacker-news.firebaseio.com/v0/item/" + idAry.get(i) + ".json?print=pretty");
+        }
+        downloadCounter++;
     }
 
     private String download(String... params) {
@@ -143,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             e.printStackTrace();
+            Toast.makeText(getApplicationContext(),"Error: Unable to download the content from web.",Toast.LENGTH_SHORT).show();
             return null;
         }
     }
